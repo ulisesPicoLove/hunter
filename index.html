@@ -156,7 +156,6 @@
         }
       }
 
-      /* Respeta “reducir movimiento” */
       @media (prefers-reduced-motion: reduce) {
         * {
           animation: none !important;
@@ -191,7 +190,6 @@
               alt="Bienvenido a Humbe Runner"
               style="width: clamp(200px, 50%, 400px)" />
           </div>
-
           <p id="subtitle">
             Evita obstáculos
             <img src="assets/BadCloud.webp" alt="" width="20" />
@@ -217,9 +215,71 @@
     <audio id="sfxOver" src="assets/lose.mp3" preload="auto"></audio>
 
     <script>
-      document.addEventListener("DOMContentLoaded", () => {
-        // =============== Orientación (gate) ===============
-        (() => {
+      /* humbe.js
+   Juego: Humbe | Caza Nubes
+   - Física, render y assets
+   - Audio con primeo móvil y control de volumen por script
+   - Inicio SOLO con botón "Jugar" (no overlay)
+   - Mute con dos estados y persistencia
+*/
+
+      (function () {
+        // =============== Utilidades generales ===============
+        const $ = (sel) => document.querySelector(sel);
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const rand = (a, b) => a + Math.random() * (b - a);
+
+        // =============== Referencias DOM esenciales ===============
+        const canvas = $("#game");
+        const ctx = canvas.getContext("2d", { alpha: true });
+
+        const overlay = $("#overlay");
+        const titleEl = $("#title");
+        const subtitleEl = $("#subtitle");
+        const statsEl = $("#stats");
+        const startBtn = $("#startBtn");
+        const jumpBtnEl = $("#jumpBtn");
+        const muteBtn = $("#muteBtn");
+
+        // HUD (cache para no tocar DOM cada frame)
+        const pointsEl = $("#points");
+        const metersEl = $("#meters");
+        const bestEl = $("#best");
+        let lastHUD = { p: -1, m: -1, b: -1 };
+
+        // =============== View / Canvas ======================
+        const V = { W: 960, H: 540, aspect: 16 / 9 };
+        let DPR = 1,
+          SCALE = 1;
+        function getViewportSize() {
+          const vw = Math.floor(
+            window.visualViewport?.width ?? window.innerWidth
+          );
+          const vh = Math.floor(
+            window.visualViewport?.height ?? window.innerHeight
+          );
+          return { vw, vh };
+        }
+        function fit() {
+          DPR = Math.min(2, window.devicePixelRatio || 1);
+          const { vw, vh } = getViewportSize();
+          SCALE = Math.min(vw / V.W, vh / V.H);
+          canvas.style.width = V.W * SCALE + "px";
+          canvas.style.height = V.H * SCALE + "px";
+          canvas.width = Math.round(V.W * DPR);
+          canvas.height = Math.round(V.H * DPR);
+          ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        }
+        window.addEventListener("resize", fit, { passive: true });
+        window.addEventListener("orientationchange", fit, { passive: true });
+        if (window.visualViewport)
+          window.visualViewport.addEventListener("resize", fit, {
+            passive: true,
+          });
+        fit();
+
+        // =============== Orientación (gate) =================
+        (function orientationGate() {
           const isTouch = () =>
             "ontouchstart" in window || navigator.maxTouchPoints > 0;
           const isMobileUA =
@@ -232,27 +292,37 @@
               ? window.matchMedia("(orientation: portrait)").matches
               : window.innerHeight >= window.innerWidth;
 
-          const overlay = document.createElement("div");
-          overlay.id = "rotateOverlay";
-          overlay.setAttribute("aria-hidden", "true");
-          overlay.style.cssText =
-            "position:fixed;inset:0;display:none;place-items:center;background:#000c;z-index:99999;color:#fff;text-align:center;padding:24px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;backdrop-filter:blur(2px)";
-          overlay.innerHTML = `
-            <div style="max-width:560px">
-              <div style="font-size:64px;line-height:1;margin-bottom:12px">🔁📱</div>
-              <h2 style="margin:0 0 6px;font-size:22px">Gira tu dispositivo</h2>
-              <p style="margin:0;opacity:.9">Este juego funciona mejor en <b>horizontal</b>.</p>
-            </div>`;
-          document.body.appendChild(overlay);
+          const gate = document.createElement("div");
+          gate.id = "rotateOverlay";
+          gate.setAttribute("aria-hidden", "true");
+          gate.style.cssText = [
+            "position:fixed",
+            "inset:0",
+            "display:none",
+            "place-items:center",
+            "background:#000c",
+            "z-index:99999",
+            "color:#fff",
+            "text-align:center",
+            "padding:24px",
+            "font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial",
+            "backdrop-filter:blur(2px)",
+          ].join(";");
+          gate.innerHTML = `
+      <div style="max-width:560px">
+        <div style="font-size:64px;line-height:1;margin-bottom:12px">🔁📱</div>
+        <h2 style="margin:0 0 6px;font-size:22px">Gira tu dispositivo</h2>
+        <p style="margin:0;opacity:.9">Este juego funciona mejor en <b>horizontal</b>.</p>
+      </div>`;
+          document.body.appendChild(gate);
 
-          const bgm = document.getElementById("bgm");
-          const canvas = document.getElementById("game");
+          const bgm = $("#bgm");
           let bgmWasPlaying = false;
           let rafGate;
 
           function showGate() {
-            overlay.style.display = "grid";
-            overlay.setAttribute("aria-hidden", "false");
+            gate.style.display = "grid";
+            gate.setAttribute("aria-hidden", "false");
             if (canvas) canvas.style.opacity = "0.001";
             if (bgm) {
               bgmWasPlaying = !bgm.paused;
@@ -262,12 +332,10 @@
             }
           }
           function hideGate() {
-            overlay.style.display = "none";
-            overlay.setAttribute("aria-hidden", "true");
+            gate.style.display = "none";
+            gate.setAttribute("aria-hidden", "true");
             if (canvas) canvas.style.opacity = "";
-            if (bgm && bgmWasPlaying) {
-              bgm.play().catch(() => {});
-            }
+            if (bgm && bgmWasPlaying) bgm.play().catch(() => {});
           }
           const applyGate = () => {
             if (!isMobile()) {
@@ -281,27 +349,6 @@
             cancelAnimationFrame(rafGate);
             rafGate = requestAnimationFrame(applyGate);
           };
-
-          async function requestLandscapeLock() {
-            try {
-              if (screen.orientation && screen.orientation.lock) {
-                await screen.orientation.lock("landscape");
-              }
-            } catch {}
-          }
-
-          const startBtn = document.getElementById("startBtn");
-          if (startBtn) {
-            startBtn.addEventListener(
-              "click",
-              () => {
-                requestLandscapeLock();
-                debouncedApplyGate();
-              },
-              { passive: true }
-            );
-          }
-
           window.addEventListener("resize", debouncedApplyGate, {
             passive: true,
           });
@@ -310,915 +357,870 @@
             () => setTimeout(debouncedApplyGate, 80),
             { passive: true }
           );
-          if (window.visualViewport) {
-            visualViewport.addEventListener("resize", debouncedApplyGate, {
-              passive: true,
-            });
-          }
+          if (window.visualViewport)
+            window.visualViewport.addEventListener(
+              "resize",
+              debouncedApplyGate,
+              { passive: true }
+            );
           document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible") debouncedApplyGate();
           });
 
           applyGate();
           window.__applyOrientationGate = applyGate;
+
+          // Opcional: bloqueo landscape al tocar "Jugar"
+          window.requestLandscapeLock = async function () {
+            try {
+              if (screen.orientation && screen.orientation.lock) {
+                await screen.orientation.lock("landscape");
+              }
+            } catch {}
+          };
         })();
 
-        // =============== Juego ===============
-        (() => {
-          // ---------- Canvas ----------
-          const c = document.getElementById("game");
-          const ctx = c.getContext("2d", { alpha: true });
-          const V = { W: 960, H: 540, aspect: 16 / 9 };
+        // =============== Assets =============================
+        const assets = {
+          bg: "assets/SkyBack.webp",
+          ground: "assets/BaseFront.webp",
+          groundFront: "assets/base.webp",
+          star: "assets/Star.webp",
+          starBonus: "assets/GoodCloud.webp",
+          obstacle: "assets/Rayo.webp",
+          meteor: "assets/meteorito.webp",
+          bird: "assets/BadCloud.webp",
+          player: {
+            runL: "assets/Humbeleft.webp",
+            runR: "assets/HumbeRigth.webp",
+            jump: "assets/HumbeJump.webp",
+          },
+          gameOverImg: "assets/GAMEOVER.webp",
+        };
+        function loadImage(src) {
+          const i = new Image();
+          i.decoding = "async";
+          i.loading = "eager";
+          i.src = src;
+          return i;
+        }
+        const img = {
+          bg: loadImage(assets.bg),
+          ground: loadImage(assets.ground),
+          groundFront: loadImage(assets.groundFront),
+          star: loadImage(assets.star),
+          starBonus: loadImage(assets.starBonus),
+          obstacle: loadImage(assets.obstacle),
+          meteor: loadImage(assets.meteor),
+          bird: loadImage(assets.bird),
+          player: {
+            runL: loadImage(assets.player.runL),
+            runR: loadImage(assets.player.runR),
+            jump: loadImage(assets.player.jump),
+          },
+        };
+        function safeDraw(imgEl, ...args) {
+          if (!imgEl || !imgEl.complete || imgEl.naturalWidth === 0) return;
+          ctx.drawImage(imgEl, ...args);
+        }
 
-          let DPR = 1,
-            SCALE = 1;
-          function getViewportSize() {
-            const vw = Math.floor(
-              window.visualViewport?.width ?? window.innerWidth
-            );
-            const vh = Math.floor(
-              window.visualViewport?.height ?? window.innerHeight
-            );
-            return { vw, vh };
+        // =============== Física / Juego =====================
+        const METEOR_W = 500,
+          METEOR_H = 401,
+          METEOR_AR = METEOR_W / METEOR_H;
+        const PLAYER_VOFFSET = 6,
+          BLOCK_VOFFSET = 6;
+
+        const G = {
+          gravity: 2200,
+          jumpV: 860,
+          groundY: () => V.H * 0.78,
+          baseSpeed: 290,
+          maxSpeed: 1000,
+          speedUpEach: 14,
+          speedUpDelta: 28,
+          starEvery: [1.0, 2.0],
+          obsEvery: [1.5, 3.2],
+        };
+        const BONUS = {
+          prob: 0.18,
+          speedMul: 1.4,
+          ampX: 18,
+          ampY: 66,
+          freq: 1.8,
+          driftY: -12,
+          jitter: 22,
+        };
+        const STAR_SIZE = { collisionR: 18, visualScale: 1 };
+        const BONUS_SIZE = { collisionR: 22, visualW: 3, visualH: 1.2 };
+
+        const PHRASES = [
+          "¡Lo que tocas, oro se hace!",
+          "¡Eres lo que el Sol siempre quiso ser!",
+          "¡Ponte cerca pa’ decírtelo al oído: te necesito!",
+          "¡Yo espero por tu llegada!",
+          "¡Tan frío y aun así me arde!",
+          "¡Por ti, yo muevo el planeta completo!",
+          "¡Si el amor no quema, no es amar!",
+          "¡No me temas, soy extraordinario!",
+          "¡Nos hacemos eternos!",
+          "¡Tú eres para mí!",
+          "¡Contigo, yo volví a respirar!",
+          "¡Diez mil kilómetros correría por ti!",
+          "¡Ten la confianza y busca la vida!",
+          "¡Respira, que todo se alivia!",
+        ];
+        function makeShuffledBag(arr) {
+          const a = (Array.isArray(arr) ? arr : []).filter((v) => v != null);
+          for (let i = a.length - 1; i > 0; i--) {
+            const j = (Math.random() * (i + 1)) | 0;
+            [a[i], a[j]] = [a[j], a[i]];
           }
-          function fit() {
-            DPR = Math.min(2, window.devicePixelRatio || 1);
-            const { vw, vh } = getViewportSize();
-            SCALE = Math.min(vw / V.W, vh / V.H);
-            c.style.width = V.W * SCALE + "px";
-            c.style.height = V.H * SCALE + "px";
-            c.width = Math.round(V.W * DPR);
-            c.height = Math.round(V.H * DPR);
-            ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-          }
-          addEventListener("resize", fit, { passive: true });
-          addEventListener("orientationchange", fit, { passive: true });
-          if (window.visualViewport)
-            visualViewport.addEventListener("resize", fit, { passive: true });
-          fit();
+          return a;
+        }
 
-          // Helpers
-          const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-          const rand = (a, b) => a + Math.random() * (b - a);
-          function safeDraw(imgEl, ...args) {
-            if (!imgEl || !imgEl.complete || imgEl.naturalWidth === 0) return;
-            ctx.drawImage(imgEl, ...args);
-          }
-          function bubbleTarget() {
-            const p = S.player;
-            return { x: p.x + p.w * 0.55, y: p.y - p.h - 50 };
-          }
+        // =============== Audio (control por script) =========
+        const bgm = $("#bgm");
+        const sfxIds = ["sfxJump", "sfxStar", "sfxBonus", "sfxOver"];
+        let audioReady = false;
+        let muted = localStorage.getItem("humbe_muted") === "1";
+        const SFX_VOLUME = 0.25;
+        let bgmVolume = (() => {
+          const v = Number(localStorage.getItem("humbe_bgm_vol"));
+          return Number.isFinite(v) ? v : 0.25;
+        })();
 
-          // ---------- ASSETS ----------
-          const assets = {
-            bg: "assets/SkyBack.webp",
-            ground: "assets/BaseFront.webp",
-            groundFront: "assets/base.webp",
-            star: "assets/Star.webp",
-            starBonus: "assets/GoodCloud.webp",
-            obstacle: "assets/Rayo.webp",
-            meteor: "assets/meteorito.webp",
-            bird: "assets/BadCloud.webp",
-            player: {
-              runL: "assets/Humbeleft.webp",
-              runR: "assets/HumbeRigth.webp",
-              jump: "assets/HumbeJump.webp",
-            },
-            gameOverImg: "assets/GAMEOVER.webp",
-          };
-          const METEOR_W = 500,
-            METEOR_H = 401,
-            METEOR_AR = METEOR_W / METEOR_H;
-          const PLAYER_VOFFSET = 6,
-            BLOCK_VOFFSET = 6;
+        function setBgmVolume(v) {
+          const clamped = clamp(Number(v), 0, 1);
+          bgmVolume = clamped;
+          localStorage.setItem("humbe_bgm_vol", String(clamped));
+          if (bgm) bgm.volume = muted ? 0 : clamped;
+        }
+        function getBgmVolume() {
+          return bgmVolume;
+        }
+        window.setBgmVolume = setBgmVolume;
+        window.getBgmVolume = getBgmVolume;
 
-          function loadImage(src) {
-            const i = new Image();
-            i.decoding = "async";
-            i.loading = "eager";
-            i.src = src;
-            return i;
-          }
-          const img = {
-            bg: loadImage(assets.bg),
-            ground: loadImage(assets.ground),
-            groundFront: loadImage(assets.groundFront),
-            star: loadImage(assets.star),
-            starBonus: loadImage(assets.starBonus),
-            obstacle: loadImage(assets.obstacle),
-            meteor: loadImage(assets.meteor),
-            bird: loadImage(assets.bird),
-            player: {
-              runL: loadImage(assets.player.runL),
-              runR: loadImage(assets.player.runR),
-              jump: loadImage(assets.player.jump),
-            },
-          };
-
-          // ---------- Física / Juego ----------
-          const G = {
-            gravity: 2200,
-            jumpV: 860,
-            groundY: () => V.H * 0.78,
-            baseSpeed: 290,
-            maxSpeed: 1000,
-            speedUpEach: 14,
-            speedUpDelta: 28,
-            starEvery: [1.0, 2.0],
-            obsEvery: [1.5, 3.2],
-          };
-          const BONUS = {
-            prob: 0.18,
-            speedMul: 1.4,
-            ampX: 18,
-            ampY: 66,
-            freq: 1.8,
-            driftY: -12,
-            jitter: 22,
-          };
-          const STAR_SIZE = { collisionR: 18, visualScale: 1 };
-          const BONUS_SIZE = { collisionR: 22, visualW: 3, visualH: 1.2 };
-
-          // ---------- Frases ----------
-          const PHRASES = Array.isArray(window.PHRASES)
-            ? window.PHRASES
-            : [
-                "¡Lo que tocas, oro se hace!",
-                "¡Eres lo que el Sol siempre quiso ser!",
-                "¡Ponte cerca pa’ decírtelo al oído: te necesito!",
-                "¡Yo espero por tu llegada!",
-                "¡Tan frío y aun así me arde!",
-                "¡Por ti, yo muevo el planeta completo!",
-                "¡Si el amor no quema, no es amar!",
-                "¡No me temas, soy extraordinario!",
-                "¡Nos hacemos eternos!",
-                "¡Tú eres para mí!",
-                "¡Contigo, yo volví a respirar!",
-                "¡Diez mil kilómetros correría por ti!",
-                "¡Ten la confianza y busca la vida!",
-                "¡Respira, que todo se alivia!",
-              ];
-          function makeShuffledBag(arr) {
-            const a = (Array.isArray(arr) ? arr : []).filter((v) => v != null);
-            for (let i = a.length - 1; i > 0; i--) {
-              const j = (Math.random() * (i + 1)) | 0;
-              [a[i], a[j]] = [a[j], a[i]];
+        function updateMuteButton() {
+          if (!muteBtn) return;
+          muteBtn.setAttribute("aria-pressed", muted ? "true" : "false");
+          muteBtn.setAttribute(
+            "aria-label",
+            muted ? "Activar sonido" : "Silenciar sonido"
+          );
+          muteBtn.textContent = muted
+            ? "🔇 Sonido desactivado"
+            : "🔊 Sonido activado";
+        }
+        function applyMuteState() {
+          if (bgm) {
+            bgm.muted = muted;
+            if (muted) {
+              try {
+                bgm.pause();
+              } catch {}
+            } else if (audioReady) {
+              bgm.volume = bgmVolume; /* play lo hace start() */
             }
-            return a;
           }
-
-          // ---------- 🔊 AUDIO----------
-          const muteBtn = document.getElementById("muteBtn");
-          const bgm = document.getElementById("bgm");
-          const sfxIds = ["sfxJump", "sfxStar", "sfxBonus", "sfxOver"];
-
-          let audioReady = false;
-          let muted = localStorage.getItem("humbe_muted") === "1";
-          const MASTER_VOLUME = 0.25;
-
-          function updateMuteButton() {
-            if (!muteBtn) return;
-            muteBtn.setAttribute("aria-pressed", muted ? "true" : "false");
-            muteBtn.setAttribute(
-              "aria-label",
-              muted ? "Activar sonido" : "Silenciar sonido"
-            );
-            muteBtn.textContent = muted
-              ? "🔇 Sonido desactivado"
-              : "🔊 Sonido activado";
-          }
-          function applyMuteState() {
-            if (bgm) {
-              bgm.muted = muted;
-              if (muted) {
-                try {
-                  bgm.pause();
-                } catch {}
-              } else if (audioReady) {
-                bgm.volume = MASTER_VOLUME;
-                bgm.play().catch(() => {});
-              }
-            }
+          sfxIds.forEach((id) => {
+            const a = document.getElementById(id);
+            if (a) a.muted = muted;
+          });
+        }
+        function primeAudioEl(a) {
+          if (!a) return;
+          const vol = a.volume;
+          a.volume = 0;
+          a.currentTime = 0;
+          a.play()
+            .then(() => {
+              a.pause();
+              a.currentTime = 0;
+              a.volume = vol;
+            })
+            .catch(() => {
+              a.volume = vol;
+            });
+        }
+        async function primeBgm() {
+          if (!bgm) return;
+          const prevVol = bgm.volume;
+          try {
+            bgm.volume = 0;
+            bgm.currentTime = 0;
+            await bgm.play();
+            bgm.pause();
+            bgm.currentTime = 0;
+          } catch {}
+          bgm.volume = prevVol;
+        }
+        async function unlockAudio() {
+          if (audioReady) return;
+          audioReady = true;
+          try {
             sfxIds.forEach((id) => {
               const a = document.getElementById(id);
-              if (a) a.muted = muted;
-            });
-          }
-          function primeAudioEl(a) {
-            if (!a) return;
-            const vol = a.volume;
-            a.volume = 0;
-            a.currentTime = 0;
-            a.play()
-              .then(() => {
-                a.pause();
-                a.currentTime = 0;
-                a.volume = vol;
-              })
-              .catch(() => {
-                a.volume = vol;
-              });
-          }
-          async function unlockAudio() {
-            if (audioReady) return;
-            audioReady = true;
-            try {
-              sfxIds.forEach((id) => {
-                const a = document.getElementById(id);
-                if (a) {
-                  a.volume = MASTER_VOLUME;
-                  primeAudioEl(a);
-                }
-              });
-              if (bgm) {
-                bgm.volume = MASTER_VOLUME;
-                bgm.muted = muted;
-                if (!muted) {
-                  await bgm.play().catch(() => {});
-                }
+              if (a) {
+                a.volume = SFX_VOLUME;
+                primeAudioEl(a);
               }
-            } catch (err) {
-              console.warn("Audio init:", err);
-            }
-            updateMuteButton();
-          }
-          function playSfx(id) {
-            if (muted || !audioReady) return;
-            const a = document.getElementById(id);
-            if (!a) return;
-            try {
-              a.currentTime = 0;
-              a.volume = MASTER_VOLUME;
-              a.play().catch(() => {});
-            } catch {}
-          }
-          if (muteBtn) {
-            muteBtn.addEventListener("click", () => {
-              muted = !muted;
-              localStorage.setItem("humbe_muted", muted ? "1" : "0");
-              updateMuteButton();
-              applyMuteState();
             });
+            if (bgm) {
+              bgm.muted = muted;
+              bgm.volume = muted ? 0 : bgmVolume;
+              // No reproducir aquí; se hace en start() desde 0
+            }
+          } catch (err) {
+            console.warn("Audio init:", err);
           }
           updateMuteButton();
-          applyMuteState();
-
-          // Primer gesto: desbloquear audio (una sola vez)
-          window.addEventListener(
-            "pointerdown",
-            () => {
-              unlockAudio();
-              applyMuteState();
-            },
-            { once: true, passive: true }
-          );
-          window.addEventListener(
-            "keydown",
-            (e) => {
-              if (["Enter", "Space", "ArrowUp"].includes(e.code)) {
-                unlockAudio();
-                applyMuteState();
-              }
-            },
-            { once: true }
-          );
-
-          // ---------- Estado ----------
-          let S;
-          let canRestartAt = 0;
-
-          function reset() {
-            S = {
-              t: 0,
-              running: false,
-              score: 0,
-              meters: 0,
-              stars: 0,
-              best: Number(localStorage.getItem("bestPoints") || 0),
-              speed: G.baseSpeed,
-              lastStar: 0,
-              lastObs: 0,
-              lastSpeedUp: 0,
-              jumps: 0,
-              player: {
-                x: 120,
-                y: G.groundY(),
-                w: 72,
-                h: 72,
-                vy: 0,
-                onGround: true,
-                state: "runL",
-                frameTimer: 0,
-                runFps: 10,
-              },
-              obs: [],
-              items: [],
-              particles: [],
-              front: {
-                x: 0,
-                speedMul: 1.15,
-                y: G.groundY() - 0,
-                h: 120,
-                alpha: 1,
-              },
-              groundScroll: { x: 0, y: V.H * 0.66, h: 120, speedPx: 80 },
-              bubble: null,
-              phraseBag: makeShuffledBag(PHRASES || []),
-            };
-          }
-          reset();
-
-          function nextPhrase() {
-            if (!S.phraseBag || S.phraseBag.length === 0)
-              S.phraseBag = makeShuffledBag(PHRASES);
-            const msg = S.phraseBag.pop();
-            return typeof msg === "string" ? msg : "";
-          }
-
-          // ---------- Input ----------
-          function jump() {
-            if (!S.running) return;
-            const p = S.player;
-            if (p.onGround || S.jumps < 2) {
-              p.vy = -G.jumpV;
-              p.onGround = false;
-              S.jumps++;
-              p.state = "jump";
-              playSfx("sfxJump");
-            }
-          }
-          addEventListener("keydown", (e) => {
-            if (["Space", "Enter", "ArrowUp"].includes(e.code))
-              e.preventDefault();
-            if (e.code === "ArrowUp") {
-              jump();
-            }
-            if (!S.running && (e.code === "Space" || e.code === "Enter")) {
-              if (performance.now() >= canRestartAt) start();
-            }
+        }
+        function playSfx(id) {
+          if (muted || !audioReady) return;
+          const a = document.getElementById(id);
+          if (!a) return;
+          try {
+            a.currentTime = 0;
+            a.volume = SFX_VOLUME;
+            a.play().catch(() => {});
+          } catch {}
+        }
+        if (muteBtn) {
+          muteBtn.addEventListener("click", () => {
+            muted = !muted;
+            localStorage.setItem("humbe_muted", muted ? "1" : "0");
+            updateMuteButton();
+            applyMuteState();
           });
-          c.addEventListener("pointerdown", (e) => {
-            e.preventDefault(); // evita scroll/tap highlight
+        }
+        updateMuteButton();
+        applyMuteState();
+
+        // =============== Estado del juego ===================
+        let S;
+        let canRestartAt = 0;
+
+        function reset() {
+          S = {
+            t: 0,
+            running: false,
+            score: 0,
+            meters: 0,
+            stars: 0,
+            best: Number(localStorage.getItem("bestPoints") || 0),
+            speed: G.baseSpeed,
+            lastStar: 0,
+            lastObs: 0,
+            lastSpeedUp: 0,
+            jumps: 0,
+            player: {
+              x: 120,
+              y: G.groundY(),
+              w: 72,
+              h: 72,
+              vy: 0,
+              onGround: true,
+              state: "runL",
+              frameTimer: 0,
+              runFps: 10,
+            },
+            obs: [],
+            items: [],
+            particles: [],
+            front: {
+              x: 0,
+              speedMul: 1.15,
+              y: G.groundY() - 0,
+              h: 120,
+              alpha: 1,
+            },
+            groundScroll: { x: 0, y: V.H * 0.66, h: 120, speedPx: 80 },
+            bubble: null,
+            phraseBag: makeShuffledBag(PHRASES),
+          };
+        }
+        reset();
+
+        function nextPhrase() {
+          if (!S.phraseBag || S.phraseBag.length === 0)
+            S.phraseBag = makeShuffledBag(PHRASES);
+          const msg = S.phraseBag.pop();
+          return typeof msg === "string" ? msg : "";
+        }
+
+        // =============== Input ==============================
+        function jump() {
+          if (!S.running) return;
+          const p = S.player;
+          if (p.onGround || S.jumps < 2) {
+            p.vy = -G.jumpV;
+            p.onGround = false;
+            S.jumps++;
+            p.state = "jump";
+            playSfx("sfxJump");
+          }
+        }
+        // SOLO salto; no iniciar con teclado (para que solo inicie con "Jugar")
+        window.addEventListener("keydown", (e) => {
+          if (["Space", "Enter", "ArrowUp"].includes(e.code))
+            e.preventDefault();
+          if (e.code === "ArrowUp") jump();
+        });
+        canvas.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          if (S.running) jump();
+        });
+        if (jumpBtnEl) {
+          jumpBtnEl.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
             if (S.running) jump();
           });
+        }
 
-          // Botón táctil "Saltar"
-          const jumpBtnEl = document.getElementById("jumpBtn");
-          if (jumpBtnEl) {
-            jumpBtnEl.addEventListener("pointerdown", (e) => {
-              e.preventDefault();
-              if (S.running) jump();
+        // =============== Spawns =============================
+        function spawn(dt) {
+          S.lastStar += dt;
+          S.lastObs += dt;
+          S.lastSpeedUp += dt;
+
+          if (S.lastSpeedUp >= G.speedUpEach) {
+            S.speed = Math.min(G.maxSpeed, S.speed + G.speedUpDelta);
+            S.lastSpeedUp = 0;
+          }
+
+          if (S.lastStar >= rand(...G.starEvery)) {
+            const isBonus = Math.random() < BONUS.prob;
+            S.items.push({
+              type: isBonus ? "bonus" : "star",
+              x: V.W + 40,
+              y: rand(V.H * 0.5, V.H * 0.72),
+              r: isBonus ? BONUS_SIZE.collisionR : STAR_SIZE.collisionR,
+              vScale: isBonus ? 1 : STAR_SIZE.visualScale || 1,
+              vW: isBonus ? BONUS_SIZE.visualW : 0,
+              vH: isBonus ? BONUS_SIZE.visualH : 0,
+              vx: S.speed * (isBonus ? BONUS.speedMul : 1.0),
+              t: 0,
+              phase: rand(0, Math.PI * 2),
+              ampX: BONUS.ampX * rand(0.6, 1.4),
+              ampY: BONUS.ampY * rand(0.6, 1.4),
+              freq: BONUS.freq * rand(0.7, 1.3),
+              driftY: BONUS.driftY * rand(0.6, 1.4),
+              jitter: BONUS.jitter,
+            });
+            S.lastStar = 0;
+          }
+
+          if (S.lastObs >= rand(...G.obsEvery)) {
+            const r = Math.random();
+            if (r < 0.55) {
+              S.obs.push({
+                type: "block",
+                x: V.W + 40,
+                y: G.groundY(),
+                w: 60,
+                h: 60,
+                vx: S.speed,
+              });
+            } else if (r < 0.85) {
+              S.obs.push({
+                type: "bird",
+                x: V.W + 40,
+                y: rand(V.H * 0.52, V.H * 0.64),
+                w: 60,
+                h: 40,
+                vx: S.speed,
+                flap: 0,
+              });
+            } else {
+              const startX = rand(V.W * 0.7, V.W + 80),
+                startY = rand(-120, -40);
+              const speed = rand(380, 520),
+                fall = rand(280, 380);
+              const destH = 26 * 2.3,
+                destW = destH * METEOR_AR;
+              S.obs.push({
+                type: "meteor",
+                x: startX,
+                y: startY,
+                vx: speed,
+                vy: fall,
+                dw: destW,
+                dh: destH,
+                rcx: -0.24,
+                rcy: 0.08,
+                rr: 0.18,
+              });
+            }
+            S.lastObs = 0;
+          }
+        }
+
+        // =============== Colisiones / Partículas ============
+        const clampR = (cx, cy, r, rx, ry, rw, rh) => {
+          const nx = clamp(cx, rx, rx + rw),
+            ny = clamp(cy, ry, ry + rh);
+          const dx = cx - nx,
+            dy = cy - ny;
+          return dx * dx + dy * dy <= r * r;
+        };
+        const aabb = (a, b) =>
+          a.x < b.x + b.w &&
+          a.x + a.w > b.x &&
+          a.y < b.y + b.h &&
+          a.y + a.h > b.y;
+
+        function puff(x, y, n = 6) {
+          for (let i = 0; i < n; i++) {
+            S.particles.push({
+              type: "note",
+              x,
+              y,
+              vx: rand(-120, 120),
+              vy: rand(-220, -80),
+              s: rand(18, 28),
+              rot: rand(-0.35, 0.35),
+              life: rand(0.8, 1.2),
             });
           }
+        }
 
-          const overlay = document.getElementById("overlay");
-          const subtitleEl = document.getElementById("subtitle");
-          const statsEl = document.getElementById("stats");
-          const startBtn = document.getElementById("startBtn");
-          if (startBtn) startBtn.onclick = () => start();
-          if (overlay) {
-            overlay.addEventListener(
-              "pointerdown",
-              () => {
-                if (!S.running && performance.now() >= canRestartAt) start();
-              },
-              { passive: true }
-            );
-          }
-
-          // ---------- Spawns ----------
-          function spawn(dt) {
-            S.lastStar += dt;
-            S.lastObs += dt;
-            S.lastSpeedUp += dt;
-
-            if (S.lastSpeedUp >= G.speedUpEach) {
-              S.speed = Math.min(G.maxSpeed, S.speed + G.speedUpDelta);
-              S.lastSpeedUp = 0;
+        // =============== Loop ===============================
+        let last = performance.now();
+        function loop(now) {
+          try {
+            const dt = Math.min((now - last) / 1000, 0.033);
+            last = now;
+            if (S.running) update(dt);
+            draw();
+          } catch (err) {
+            console.error(err);
+            if (overlay) overlay.classList.add("show");
+            if (statsEl) {
+              statsEl.style.display = "block";
+              statsEl.textContent = "Error: " + (err?.message || String(err));
             }
-
-            if (S.lastStar >= rand(...G.starEvery)) {
-              const isBonus = Math.random() < BONUS.prob;
-              S.items.push({
-                type: isBonus ? "bonus" : "star",
-                x: V.W + 40,
-                y: rand(V.H * 0.5, V.H * 0.72),
-                r: isBonus ? BONUS_SIZE.collisionR : STAR_SIZE.collisionR,
-                vScale: isBonus ? 1 : STAR_SIZE.visualScale || 1,
-                vW: isBonus ? BONUS_SIZE.visualW : 0,
-                vH: isBonus ? BONUS_SIZE.visualH : 0,
-                vx: S.speed * (isBonus ? BONUS.speedMul : 1.0),
-                t: 0,
-                phase: rand(0, Math.PI * 2),
-                ampX: BONUS.ampX * rand(0.6, 1.4),
-                ampY: BONUS.ampY * rand(0.6, 1.4),
-                freq: BONUS.freq * rand(0.7, 1.3),
-                driftY: BONUS.driftY * rand(0.6, 1.4),
-                jitter: BONUS.jitter,
-              });
-              S.lastStar = 0;
-            }
-
-            if (S.lastObs >= rand(...G.obsEvery)) {
-              const r = Math.random();
-              if (r < 0.55) {
-                S.obs.push({
-                  type: "block",
-                  x: V.W + 40,
-                  y: G.groundY(),
-                  w: 60,
-                  h: 60,
-                  vx: S.speed,
-                });
-              } else if (r < 0.85) {
-                S.obs.push({
-                  type: "bird",
-                  x: V.W + 40,
-                  y: rand(V.H * 0.52, V.H * 0.64),
-                  w: 60,
-                  h: 40,
-                  vx: S.speed,
-                  flap: 0,
-                });
-              } else {
-                const startX = rand(V.W * 0.7, V.W + 80),
-                  startY = rand(-120, -40);
-                const speed = rand(380, 520),
-                  fall = rand(280, 380);
-                const destH = 26 * 2.3,
-                  destW = destH * METEOR_AR;
-                S.obs.push({
-                  type: "meteor",
-                  x: startX,
-                  y: startY,
-                  vx: speed,
-                  vy: fall,
-                  dw: destW,
-                  dh: destH,
-                  rcx: -0.24,
-                  rcy: 0.08,
-                  rr: 0.18,
-                });
-              }
-              S.lastObs = 0;
-            }
-          }
-
-          // ---------- Colisiones / partículas ----------
-          const clampR = (cx, cy, r, rx, ry, rw, rh) => {
-            const nx = clamp(cx, rx, rx + rw),
-              ny = clamp(cy, ry, ry + rh);
-            const dx = cx - nx,
-              dy = cy - ny;
-            return dx * dx + dy * dy <= r * r;
-          };
-          const aabb = (a, b) =>
-            a.x < b.x + b.w &&
-            a.x + a.w > b.x &&
-            a.y < b.y + b.h &&
-            a.y + a.h > b.y;
-
-          function puff(x, y, n = 6) {
-            for (let i = 0; i < n; i++) {
-              S.particles.push({
-                type: "note",
-                x,
-                y,
-                vx: rand(-120, 120),
-                vy: rand(-220, -80),
-                s: rand(18, 28),
-                rot: rand(-0.35, 0.35),
-                life: rand(0.8, 1.2),
-              });
-            }
-          }
-
-          // ---------- Loop ----------
-          let last = performance.now();
-          function loop(now) {
-            try {
-              const dt = Math.min((now - last) / 1000, 0.033);
-              last = now;
-              if (S.running) update(dt);
-              draw();
-            } catch (err) {
-              console.error(err);
-              if (overlay) overlay.classList.add("show");
-              if (statsEl) {
-                statsEl.style.display = "block";
-                statsEl.textContent = "Error: " + (err?.message || String(err));
-              }
-            }
-            requestAnimationFrame(loop);
           }
           requestAnimationFrame(loop);
+        }
+        requestAnimationFrame(loop);
 
-          function update(dt) {
-            S.t += dt;
-            S.meters += S.speed * dt * 0.06;
+        function update(dt) {
+          S.t += dt;
+          S.meters += S.speed * dt * 0.06;
 
-            if (S.bubble && S.bubble.lockToPlayer) {
-              const t = bubbleTarget();
-              const followSpeed = 12;
-              S.bubble.x += (t.x - S.bubble.x) * Math.min(1, dt * followSpeed);
-              S.bubble.y += (t.y - S.bubble.y) * Math.min(1, dt * followSpeed);
-              S.bubble.x = clamp(S.bubble.x, 16, V.W - 16);
-              S.bubble.y = clamp(S.bubble.y, 16, V.H - 16);
+          if (S.bubble && S.bubble.lockToPlayer) {
+            const t = bubbleTarget();
+            const followSpeed = 12;
+            S.bubble.x += (t.x - S.bubble.x) * Math.min(1, dt * followSpeed);
+            S.bubble.y += (t.y - S.bubble.y) * Math.min(1, dt * followSpeed);
+            S.bubble.x = clamp(S.bubble.x, 16, V.W - 16);
+            S.bubble.y = clamp(S.bubble.y, 16, V.H - 16);
+          }
+
+          // Física
+          const p = S.player;
+          p.vy += G.gravity * dt;
+          p.y += p.vy * dt;
+          if (p.y > G.groundY()) {
+            p.y = G.groundY();
+            p.vy = 0;
+            p.onGround = true;
+            S.jumps = 0;
+            if (p.state === "jump") p.state = "runL";
+          } else p.onGround = false;
+
+          // Animación
+          if (p.onGround) {
+            p.frameTimer += dt;
+            if (p.frameTimer >= 1 / p.runFps) {
+              p.state = p.state === "runL" ? "runR" : "runL";
+              p.frameTimer = 0;
             }
+          } else p.state = "jump";
 
-            // Física
-            const p = S.player;
-            p.vy += G.gravity * dt;
-            p.y += p.vy * dt;
-            if (p.y > G.groundY()) {
-              p.y = G.groundY();
-              p.vy = 0;
-              p.onGround = true;
-              S.jumps = 0;
-              if (p.state === "jump") p.state = "runL";
-            } else p.onGround = false;
+          spawn(dt);
 
-            // Animación
-            if (p.onGround) {
-              p.frameTimer += dt;
-              if (p.frameTimer >= 1 / p.runFps) {
-                p.state = p.state === "runL" ? "runR" : "runL";
-                p.frameTimer = 0;
+          // Mover obs/items
+          S.obs.forEach((o) => {
+            if (o.type === "bird" || o.type === "block") {
+              o.x -= o.vx * dt;
+              if (o.type === "bird") {
+                o.flap += dt * 9;
+                o.y += Math.sin(S.t * 4 + o.x * 0.02) * 0.6;
               }
-            } else p.state = "jump";
+            } else if (o.type === "meteor") {
+              o.x -= o.vx * dt;
+              o.y += o.vy * dt;
+            }
+          });
+          S.items.forEach((i) => {
+            i.x -= i.vx * dt;
+            if (i.type === "bonus") {
+              i.t += dt;
+              i.x += Math.cos(i.phase + i.t * i.freq) * (i.ampX * dt);
+              i.y += Math.sin(i.phase * 0.7 + i.t * i.freq) * (i.ampY * dt);
+              i.y += i.driftY * dt;
+              if (Math.random() < 0.05) i.y += rand(-i.jitter, i.jitter) * 0.05;
+              i.y = clamp(i.y, V.H * 0.35, V.H * 0.78);
+            }
+          });
 
-            spawn(dt);
+          // Parallax
+          S.front.x -= S.speed * S.front.speedMul * dt;
+          if (S.front.x <= -V.W) S.front.x += V.W;
+          S.groundScroll.x -= S.groundScroll.speedPx * dt;
+          if (S.groundScroll.x <= -V.W) S.groundScroll.x += V.W;
 
-            // Mover obs/items
-            S.obs.forEach((o) => {
-              if (o.type === "bird" || o.type === "block") {
-                o.x -= o.vx * dt;
-                if (o.type === "bird") {
-                  o.flap += dt * 9;
-                  o.y += Math.sin(S.t * 4 + o.x * 0.02) * 0.6;
-                }
-              } else if (o.type === "meteor") {
-                o.x -= o.vx * dt;
-                o.y += o.vy * dt;
+          // Área jugador
+          const pr = {
+            x: p.x + p.w * 0.15,
+            y: p.y - p.h + 5,
+            w: p.w * 0.7,
+            h: p.h - 10,
+          };
+
+          // Items
+          for (let i = S.items.length - 1; i >= 0; i--) {
+            const s = S.items[i];
+            if (clampR(s.x, s.y, s.r, pr.x, pr.y, pr.w, pr.h)) {
+              S.stars++;
+              if (s.type === "bonus") {
+                S.score += 120;
+                puff(s.x, s.y, 8);
+                S.particles.push({
+                  x: s.x,
+                  y: s.y - 60,
+                  vx: 0,
+                  vy: 0,
+                  r: 0,
+                  life: 0.8,
+                  text: "+120",
+                  color: "#2519e3",
+                  stroke: "#3b2f00",
+                });
+                playSfx("sfxBonus");
+              } else {
+                S.score += 10;
+                puff(s.x, s.y, 5);
+                playSfx("sfxStar");
               }
-            });
-            S.items.forEach((i) => {
-              i.x -= i.vx * dt;
-              if (i.type === "bonus") {
-                i.t += dt;
-                i.x += Math.cos(i.phase + i.t * i.freq) * (i.ampX * dt);
-                i.y += Math.sin(i.phase * 0.7 + i.t * i.freq) * (i.ampY * dt);
-                i.y += i.driftY * dt;
-                if (Math.random() < 0.05)
-                  i.y += rand(-i.jitter, i.jitter) * 0.05;
-                i.y = clamp(i.y, V.H * 0.35, V.H * 0.78);
+              if (S.stars % 4 === 0) {
+                const msg = nextPhrase();
+                const t = bubbleTarget();
+                S.bubble = {
+                  text: msg,
+                  time: 3.3,
+                  x: t.x,
+                  y: t.y,
+                  lockToPlayer: true,
+                };
               }
-            });
+              S.items.splice(i, 1);
+            } else if (s.x < -80) S.items.splice(i, 1);
+          }
 
-            // Parallax
-            S.front.x -= S.speed * S.front.speedMul * dt;
-            if (S.front.x <= -V.W) S.front.x += V.W;
-            S.groundScroll.x -= S.groundScroll.speedPx * dt;
-            if (S.groundScroll.x <= -V.W) S.groundScroll.x += V.W;
-
-            // Área jugador
-            const pr = {
-              x: p.x + p.w * 0.15,
-              y: p.y - p.h + 5,
-              w: p.w * 0.7,
-              h: p.h - 10,
+          // Colisiones letales
+          for (const o of S.obs) {
+            if (o.type === "meteor") {
+              const mw = o.dw ?? (o.dh ? o.dh * METEOR_AR : METEOR_W);
+              const mh = o.dh ?? (o.dw ? o.dw / METEOR_AR : METEOR_H);
+              const cx = o.x + mw * (o.rcx ?? -0.24);
+              const cy = o.y + mh * (o.rcy ?? 0.08);
+              const rr = mh * (o.rr ?? 0.18);
+              if (clampR(cx, cy, rr, pr.x, pr.y, pr.w, pr.h)) return over();
+              continue;
+            }
+            const ob = {
+              x: o.x + o.w * 0.1,
+              y: o.y - o.h,
+              w: o.w * 0.8,
+              h: o.h,
             };
-
-            // Items
-            for (let i = S.items.length - 1; i >= 0; i--) {
-              const s = S.items[i];
-              if (clampR(s.x, s.y, s.r, pr.x, pr.y, pr.w, pr.h)) {
-                S.stars++;
-                if (s.type === "bonus") {
-                  S.score += 120;
-                  puff(s.x, s.y, 8);
-                  S.particles.push({
-                    x: s.x,
-                    y: s.y - 60,
-                    vx: 0,
-                    vy: 0,
-                    r: 0,
-                    life: 0.8,
-                    text: "+120",
-                    color: "#2519e3",
-                    stroke: "#3b2f00",
-                  });
-                  playSfx("sfxBonus");
-                } else {
-                  S.score += 10;
-                  puff(s.x, s.y, 5);
-                  playSfx("sfxStar");
-                }
-                if (S.stars % 4 === 0) {
-                  const msg = nextPhrase();
-                  const t = bubbleTarget();
-                  S.bubble = {
-                    text: msg,
-                    time: 3.3,
-                    x: t.x,
-                    y: t.y,
-                    lockToPlayer: true,
-                  };
-                }
-                S.items.splice(i, 1);
-              } else if (s.x < -80) S.items.splice(i, 1);
-            }
-
-            // Colisiones letales
-            for (const o of S.obs) {
-              if (o.type === "meteor") {
-                const mw = o.dw ?? (o.dh ? o.dh * METEOR_AR : METEOR_W);
-                const mh = o.dh ?? (o.dw ? o.dw / METEOR_AR : METEOR_H);
-                const cx = o.x + mw * (o.rcx ?? -0.24);
-                const cy = o.y + mh * (o.rcy ?? 0.08);
-                const rr = mh * (o.rr ?? 0.18);
-                if (clampR(cx, cy, rr, pr.x, pr.y, pr.w, pr.h)) return over();
-                continue;
-              }
-              const ob = {
-                x: o.x + o.w * 0.1,
-                y: o.y - o.h,
-                w: o.w * 0.8,
-                h: o.h,
-              };
-              if (aabb(pr, ob)) {
-                if (o.type === "bird" && p.y < o.y - o.h / 2) continue;
-                return over();
-              }
-            }
-
-            // Limpieza partículas
-            S.obs = S.obs.filter((o) => o.x > -120 && o.y < V.H + 140);
-            for (let i = S.particles.length - 1; i >= 0; i--) {
-              const pa = S.particles[i];
-              pa.life -= dt;
-              if (pa.life <= 0) {
-                S.particles.splice(i, 1);
-                continue;
-              }
-              pa.x += pa.vx * dt;
-              pa.y += pa.vy * dt;
-              pa.vy += 900 * dt;
-            }
-
-            if (S.bubble) {
-              S.bubble.time -= dt;
-              if (S.bubble.time <= 0) S.bubble = null;
+            if (aabb(pr, ob)) {
+              if (o.type === "bird" && p.y < o.y - o.h / 2) continue;
+              return over();
             }
           }
 
-          // ---------- Dibujo ----------
-          function drawMeteorProportional(o) {
-            const m = img.meteor,
-              iw = m.width || METEOR_W,
-              ih = m.height || METEOR_H;
-            const DW = o.dw ?? (o.dh ? o.dh * METEOR_AR : iw);
-            const DH = o.dh ?? (o.dw ? o.dw / METEOR_AR : ih);
-            safeDraw(m, 0, 0, iw, ih, o.x - DW / 2, o.y - DH / 2, DW, DH);
-          }
-          function drawTiled(image, x, y, h) {
-            const tex =
-              image && image.complete && image.naturalWidth
-                ? image
-                : img.ground;
-            let x0 = Math.floor(x);
-            while (x0 > 0) x0 -= V.W;
-            for (let xx = x0; xx < V.W; xx += V.W) safeDraw(tex, xx, y, V.W, h);
-          }
-          function drawSpeechBubble(text, x, y, maxW = 220) {
-            ctx.font = "bold 14px system-ui, Arial";
-            const words = String(text).split(/\s+/);
-            const lines = [];
-            let line = "";
-            for (const w of words) {
-              const t = line ? line + " " + w : w;
-              if (ctx.measureText(t).width <= maxW) line = t;
-              else {
-                if (line) lines.push(line);
-                line = w;
-              }
+          // Partículas
+          S.obs = S.obs.filter((o) => o.x > -120 && o.y < V.H + 140);
+          for (let i = S.particles.length - 1; i >= 0; i--) {
+            const pa = S.particles[i];
+            pa.life -= dt;
+            if (pa.life <= 0) {
+              S.particles.splice(i, 1);
+              continue;
             }
-            if (line) lines.push(line);
-            const lh = 22,
-              padX = 12,
-              padY = 10;
-            const w = Math.min(
-              maxW,
-              Math.max(...lines.map((t) => ctx.measureText(t).width)) + padX * 2
-            );
-            const h = lines.length * lh + padY * 2;
-            const rx = x - w / 2,
-              ry = y - h,
-              r = 10;
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(rx + r, ry);
-            ctx.lineTo(rx + w - r, ry);
-            ctx.quadraticCurveTo(rx + w, ry, rx + w, ry + r);
-            ctx.lineTo(rx + w, ry + h - r);
-            ctx.quadraticCurveTo(rx + w, ry + h, rx + w - r, ry + h);
-            const tipX = x + 12,
-              tipY = ry + h + 8;
-            ctx.lineTo(tipX, ry + h);
-            ctx.lineTo(x, tipY);
-            ctx.lineTo(x - 12, ry + h);
-            ctx.lineTo(rx + r, ry + h);
-            ctx.quadraticCurveTo(rx, ry + h, rx, ry + h - r);
-            ctx.lineTo(rx, ry + r);
-            ctx.quadraticCurveTo(rx, ry, rx + r, ry);
-            ctx.closePath();
-
-            ctx.shadowColor = "#0008";
-            ctx.shadowBlur = 2;
-            ctx.fillStyle = "#f2f2f2";
-            ctx.fill();
-            ctx.shadowBlur = 0;
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = "#faf";
-            ctx.stroke();
-
-            ctx.fillStyle = "#111";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            let yy = ry + padY + lh / 2;
-            for (const ln of lines) {
-              ctx.fillText(ln, x, yy);
-              yy += lh;
-            }
-            ctx.restore();
+            pa.x += pa.vx * dt;
+            pa.y += pa.vy * dt;
+            pa.vy += 900 * dt;
           }
 
-          // Cache HUD + evitar tocar DOM cada frame
-          const pointsEl = document.getElementById("points");
-          const metersEl = document.getElementById("meters");
-          const bestEl = document.getElementById("best");
-          let lastHUD = { p: -1, m: -1, b: -1 };
+          if (S.bubble) {
+            S.bubble.time -= dt;
+            if (S.bubble.time <= 0) S.bubble = null;
+          }
+        }
 
-          function draw() {
-            ctx.clearRect(0, 0, V.W, V.H);
-            safeDraw(img.bg, 0, 0, V.W, V.H);
-
-            drawTiled(
-              img.ground,
-              S.groundScroll.x,
-              S.groundScroll.y,
-              S.groundScroll.h
-            );
-
-            for (const s of S.items) {
-              const isBonus = s.type === "bonus";
-              const spr = isBonus ? img.starBonus : img.star;
-              if (isBonus) {
-                const w = s.r * (s.vW || 3.2),
-                  h = s.r * (s.vH || 1.6);
-                safeDraw(spr, s.x - w / 2, s.y - h / 2, w, h);
-              } else {
-                const scale = s.vScale || 1,
-                  rr = s.r * scale;
-                safeDraw(spr, s.x - rr, s.y - rr, rr * 2, rr * 2);
-              }
+        function drawMeteorProportional(o) {
+          const m = img.meteor,
+            iw = m.width || METEOR_W,
+            ih = m.height || METEOR_H;
+          const DW = o.dw ?? (o.dh ? o.dh * METEOR_AR : iw);
+          const DH = o.dh ?? (o.dw ? o.dw / METEOR_AR : ih);
+          safeDraw(m, 0, 0, iw, ih, o.x - DW / 2, o.y - DH / 2, DW, DH);
+        }
+        function drawTiled(image, x, y, h) {
+          const tex =
+            image && image.complete && image.naturalWidth ? image : img.ground;
+          let x0 = Math.floor(x);
+          while (x0 > 0) x0 -= V.W;
+          for (let xx = x0; xx < V.W; xx += V.W) safeDraw(tex, xx, y, V.W, h);
+        }
+        function bubbleTarget() {
+          const p = S.player;
+          return { x: p.x + p.w * 0.55, y: p.y - p.h - 50 };
+        }
+        function drawSpeechBubble(text, x, y, maxW = 220) {
+          ctx.font = "bold 14px system-ui, Arial";
+          const words = String(text).split(/\s+/);
+          const lines = [];
+          let line = "";
+          for (const w of words) {
+            const t = line ? line + " " + w : w;
+            if (ctx.measureText(t).width <= maxW) line = t;
+            else {
+              if (line) lines.push(line);
+              line = w;
             }
+          }
+          if (line) lines.push(line);
+          const lh = 22,
+            padX = 12,
+            padY = 10;
+          const w = Math.min(
+            maxW,
+            Math.max(...lines.map((t) => ctx.measureText(t).width)) + padX * 2
+          );
+          const h = lines.length * lh + padY * 2;
+          const rx = x - w / 2,
+            ry = y - h,
+            r = 10;
 
-            for (const o of S.obs) {
-              if (o.type === "bird")
-                safeDraw(img.bird, o.x, o.y - o.h, o.w, o.h);
-              else if (o.type === "meteor") drawMeteorProportional(o);
-              else
-                safeDraw(
-                  img.obstacle,
-                  o.x,
-                  o.y - o.h + BLOCK_VOFFSET,
-                  o.w,
-                  o.h
-                );
-            }
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(rx + r, ry);
+          ctx.lineTo(rx + w - r, ry);
+          ctx.quadraticCurveTo(rx + w, ry, rx + w, ry + r);
+          ctx.lineTo(rx + w, ry + h - r);
+          ctx.quadraticCurveTo(rx + w, ry + h, rx + w - r, ry + h);
+          const tipX = x + 12,
+            tipY = ry + h + 8;
+          ctx.lineTo(tipX, ry + h);
+          ctx.lineTo(x, tipY);
+          ctx.lineTo(x - 12, ry + h);
+          ctx.lineTo(rx + r, ry + h);
+          ctx.quadraticCurveTo(rx, ry + h, rx, ry + h - r);
+          ctx.lineTo(rx, ry + r);
+          ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+          ctx.closePath();
 
-            const p = S.player;
-            const sprite =
-              p.state === "runL"
-                ? img.player.runL
-                : p.state === "runR"
-                  ? img.player.runR
-                  : img.player.jump;
-            ctx.save();
-            const tilt = p.onGround ? 0 : clamp(p.vy / 900, -0.6, 0.6);
-            ctx.translate(p.x + p.w / 2, p.y - p.h / 2 + PLAYER_VOFFSET);
-            ctx.rotate(tilt);
-            safeDraw(sprite, -p.w / 2, -p.h / 2, p.w, p.h);
-            ctx.restore();
+          ctx.shadowColor = "#0008";
+          ctx.shadowBlur = 2;
+          ctx.fillStyle = "#f2f2f2";
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "#faf";
+          ctx.stroke();
 
-            if (S.bubble)
-              drawSpeechBubble(S.bubble.text, S.bubble.x, S.bubble.y);
+          ctx.fillStyle = "#111";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          let yy = ry + padY + lh / 2;
+          for (const ln of lines) {
+            ctx.fillText(ln, x, yy);
+            yy += lh;
+          }
+          ctx.restore();
+        }
 
-            for (const pa of S.particles) {
-              ctx.globalAlpha = Math.max(0, Math.min(1, pa.life));
-              if (pa.text) {
-                ctx.font = "bold 20px system-ui, Arial";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillStyle = pa.color || "#a3f";
-                ctx.fillText(pa.text, pa.x, pa.y);
-              } else {
-                ctx.save();
-                ctx.translate(pa.x, pa.y);
-                ctx.rotate(pa.rot || 0);
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.font = `bold ${Math.round(pa.s)}px system-ui, Apple Color Emoji, Segoe UI Emoji, Arial`;
-                ctx.fillStyle = "#ffd33d";
-                ctx.strokeStyle = "#c99b1a";
-                ctx.lineWidth = 2;
-                const glyph = "♪";
-                ctx.fillText(glyph, 0, 0);
-                ctx.strokeText(glyph, 0, 0);
-                ctx.restore();
-              }
-              ctx.globalAlpha = 1;
-            }
+        function draw() {
+          ctx.clearRect(0, 0, V.W, V.H);
+          safeDraw(img.bg, 0, 0, V.W, V.H);
 
-            drawTiled(img.groundFront, S.front.x, S.front.y, S.front.h);
+          drawTiled(
+            img.ground,
+            S.groundScroll.x,
+            S.groundScroll.y,
+            S.groundScroll.h
+          );
 
-            // HUD (sólo si cambia)
-            const pNow = Math.floor(S.score);
-            const mNow = Math.floor(S.meters);
-            if (pNow !== lastHUD.p) {
-              if (pointsEl) pointsEl.textContent = pNow;
-              lastHUD.p = pNow;
-            }
-            if (mNow !== lastHUD.m) {
-              if (metersEl) metersEl.textContent = mNow;
-              lastHUD.m = mNow;
-            }
-            if (S.best !== lastHUD.b) {
-              if (bestEl) bestEl.textContent = S.best;
-              lastHUD.b = S.best;
+          for (const s of S.items) {
+            const isBonus = s.type === "bonus";
+            const spr = isBonus ? img.starBonus : img.star;
+            if (isBonus) {
+              const w = s.r * (s.vW || 3.2),
+                h = s.r * (s.vH || 1.6);
+              safeDraw(spr, s.x - w / 2, s.y - h / 2, w, h);
+            } else {
+              const scale = s.vScale || 1,
+                rr = s.r * scale;
+              safeDraw(spr, s.x - rr, s.y - rr, rr * 2, rr * 2);
             }
           }
 
-          // ---------- Ciclo de vida ----------
-          function start() {
-            reset();
-            S.running = true;
-
-            const titleEl = document.getElementById("title");
-            if (titleEl) titleEl.replaceChildren("¡A correr!");
-            if (subtitleEl) {
-              subtitleEl.textContent =
-                "Evita obstáculos, atrapa estrellas. Toca / Espacio / ↑ para saltar. Doble salto habilitado.";
-            }
-            if (statsEl) statsEl.style.display = "none";
-            const rewardBtn = document.getElementById("rewardBtn");
-            if (rewardBtn) rewardBtn.style.display = "none";
-            if (overlay) overlay.classList.remove("show");
-
-            if (bgm && audioReady && !muted) bgm.play().catch(() => {});
+          for (const o of S.obs) {
+            if (o.type === "bird") safeDraw(img.bird, o.x, o.y - o.h, o.w, o.h);
+            else if (o.type === "meteor") drawMeteorProportional(o);
+            else
+              safeDraw(img.obstacle, o.x, o.y - o.h + BLOCK_VOFFSET, o.w, o.h);
           }
 
-          function over() {
-            S.running = false;
+          const p = S.player;
+          const sprite =
+            p.state === "runL"
+              ? img.player.runL
+              : p.state === "runR"
+                ? img.player.runR
+                : img.player.jump;
+          ctx.save();
+          const tilt = p.onGround ? 0 : clamp(p.vy / 900, -0.6, 0.6);
+          ctx.translate(p.x + p.w / 2, p.y - p.h / 2 + PLAYER_VOFFSET);
+          ctx.rotate(tilt);
+          safeDraw(sprite, -p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
 
-            const finalPoints = Math.floor(S.score);
-            if (finalPoints > S.best) {
-              S.best = finalPoints;
-              localStorage.setItem("bestPoints", String(S.best));
-            }
+          if (S.bubble) drawSpeechBubble(S.bubble.text, S.bubble.x, S.bubble.y);
 
-            const titleEl = document.getElementById("title");
-            if (titleEl) {
-              const im = new Image();
-              im.src = assets.gameOverImg;
-              im.alt = "Game Over";
-              im.loading = "lazy";
-              im.decoding = "async";
-              im.style.display = "block";
-              im.style.margin = "12px auto 0";
-              im.style.maxWidth = "clamp(200px, 50%, 400px)";
-              im.style.height = "auto";
-              titleEl.replaceChildren(im);
+          for (const pa of S.particles) {
+            ctx.globalAlpha = Math.max(0, Math.min(1, pa.life));
+            if (pa.text) {
+              ctx.font = "bold 20px system-ui, Arial";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillStyle = pa.color || "#a3f";
+              ctx.fillText(pa.text, pa.x, pa.y);
+            } else {
+              ctx.save();
+              ctx.translate(pa.x, pa.y);
+              ctx.rotate(pa.rot || 0);
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.font = `bold ${Math.round(pa.s)}px system-ui, Apple Color Emoji, Segoe UI Emoji, Arial`;
+              ctx.fillStyle = "#ffd33d";
+              ctx.strokeStyle = "#c99b1a";
+              ctx.lineWidth = 2;
+              const glyph = "♪";
+              ctx.fillText(glyph, 0, 0);
+              ctx.strokeText(glyph, 0, 0);
+              ctx.restore();
             }
-            if (subtitleEl) {
-              subtitleEl.textContent =
-                "Pulsa Enter / clic / tap para reiniciar.";
-            }
-            if (statsEl) {
-              statsEl.innerHTML = `Puntos: <b>${finalPoints}</b> · Distancia: <b>${Math.floor(S.meters)}</b> m · Récord: <b>${S.best}</b>`;
-              statsEl.style.display = "block";
-            }
-            if (overlay) overlay.classList.add("show");
-            canRestartAt = performance.now() + 600;
-
-            playSfx("sfxOver");
+            ctx.globalAlpha = 1;
           }
 
+          drawTiled(img.groundFront, S.front.x, S.front.y, S.front.h);
+
+          // HUD mínimo (solo si cambia)
+          const pNow = Math.floor(S.score);
+          const mNow = Math.floor(S.meters);
+          if (pNow !== lastHUD.p) {
+            if (pointsEl) pointsEl.textContent = pNow;
+            lastHUD.p = pNow;
+          }
+          if (mNow !== lastHUD.m) {
+            if (metersEl) metersEl.textContent = mNow;
+            lastHUD.m = mNow;
+          }
+          if (S.best !== lastHUD.b) {
+            if (bestEl) bestEl.textContent = S.best;
+            lastHUD.b = S.best;
+          }
+        }
+
+        // =============== Ciclo de vida ======================
+        function start() {
+          reset();
+          S.running = true;
+
+          if (titleEl) titleEl.replaceChildren("¡A correr!");
+          if (subtitleEl) {
+            subtitleEl.textContent =
+              "Evita obstáculos, atrapa estrellas. Toca / Espacio / ↑ para saltar. Doble salto habilitado.";
+          }
+          if (statsEl) statsEl.style.display = "none";
+          if (overlay) overlay.classList.remove("show");
+
+          // 🔊 Arranque limpio del BGM SIEMPRE desde 0
+          if (bgm) {
+            try {
+              bgm.pause();
+            } catch {}
+            try {
+              bgm.currentTime = 0;
+            } catch {}
+            if (audioReady && !muted) {
+              bgm.volume = bgmVolume;
+              bgm.play().catch(() => {});
+            }
+          }
+        }
+
+        function over() {
+          S.running = false;
+
+          const finalPoints = Math.floor(S.score);
+          if (finalPoints > S.best) {
+            S.best = finalPoints;
+            localStorage.setItem("bestPoints", String(S.best));
+          }
+
+          if (titleEl) {
+            const im = new Image();
+            im.src = assets.gameOverImg;
+            im.alt = "Game Over";
+            im.loading = "lazy";
+            im.decoding = "async";
+            im.style.display = "block";
+            im.style.margin = "12px auto 0";
+            im.style.maxWidth = "clamp(200px, 50%, 400px)";
+            im.style.height = "auto";
+            titleEl.replaceChildren(im);
+          }
+          if (subtitleEl)
+            subtitleEl.textContent = "Pulsa Jugar para reiniciar.";
+          if (statsEl) {
+            statsEl.innerHTML = `Puntos: <b>${finalPoints}</b> · Distancia: <b>${Math.floor(S.meters)}</b> m · Récord: <b>${S.best}</b>`;
+            statsEl.style.display = "block";
+          }
           if (overlay) overlay.classList.add("show");
-        })();
-      });
+          canRestartAt = performance.now() + 600;
+
+          // Pausa BGM al perder (no cambiar volumen ni muted)
+          if (bgm) {
+            try {
+              bgm.pause();
+            } catch {}
+          }
+
+          playSfx("sfxOver");
+        }
+
+        // Mostrar overlay al cargar
+        if (overlay) overlay.classList.add("show");
+
+        // =============== Vínculos de UI (inicio y audio) ===
+        if (startBtn) {
+          startBtn.onclick = async () => {
+            await window.requestLandscapeLock?.();
+            await primeBgm(); // desbloquea BGM en iOS/Android
+            await unlockAudio(); // prepara SFX y estados
+            start();
+          };
+        }
+      })();
     </script>
   </body>
 </html>
