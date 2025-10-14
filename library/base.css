@@ -281,10 +281,28 @@ canvas {
     display: none;
 }
 
-@media only screen and (orientation: landscape) and (max-width: 768px) {
+.deskText {
+    display: none;
+}
+
+.mobileText {
+    display: block;
+}
+
+@media (any-hover: hover) and (any-pointer: fine) {
+    .deskText {
+        display: block;
+    }
+
+    .mobileText {
+        display: none;
+    }
+}
+
+@media (min-width: 992px) {
 
     .deskText {
-        display: none;
+        display: block;
     }
 
     .mobileText {
