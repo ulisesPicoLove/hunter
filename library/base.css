@@ -6,7 +6,7 @@ html,
 body {
     margin: 0;
     height: 100%;
-    background: #111;
+    background: #000;
     font-family: "helvetica-neue-lt-pro-cond", sans-serif;
     font-weight: 300;
     font-style: normal;
@@ -99,11 +99,14 @@ canvas {
 
 .card {
     background: #fff;
-    color: #222;
+    color: #2d3b97;
     padding: 6px 10px;
     border-radius: 12px;
     font-weight: 700;
     font-size: 14px;
+    display: flex;
+    align-items: center;
+    border: 2px solid #272727;
 }
 
 #muteBtn {
@@ -278,12 +281,13 @@ canvas {
     display: none;
 }
 
-@media (max-width: 660px) {
+@media only screen and (orientation: landscape) and (max-width: 768px) {
+
     .deskText {
         display: none;
     }
 
     .mobileText {
-        display: block;
+        display: none;
     }
 }

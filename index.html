@@ -13,15 +13,16 @@
   <body>
     <div id="wrap">
       <canvas id="game"></canvas>
-
       <div class="hud">
         <div class="card">
-          <strong>Puntos</strong> <span id="points">0</span>
+          <strong>Puntos: </strong>&nbsp;<span id="points">0</span>
         </div>
         <div class="card">
-          <strong>Distancia</strong> <span id="meters">0</span> m
+          <strong>Distancia: </strong>&nbsp;<span id="meters">0</span> m
         </div>
-        <div class="card"><strong>Recórd</strong> <span id="best">0</span></div>
+        <div class="card">
+          <strong>Recórd: </strong>&nbsp;<span id="best">0</span>
+        </div>
         <button
           id="muteBtn"
           class="card fontBody"
@@ -512,7 +513,6 @@
             updateMuteButton();
           }
           function playSfx(id) {
-            // En móvil, silenciar específicamente Star/Bonus
             if (MOBILE && (id === "sfxStar" || id === "sfxBonus")) return;
             if (muted || !audioReady) return;
             const a = document.getElementById(id);
