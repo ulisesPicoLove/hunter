@@ -50,12 +50,12 @@
   const Poster = {
     cfg: {
       width: 1080,
-      height: 1350,
+      height: 1920,
       hashtag: "#CazaNubes",
       title: "HUMBE | CAZA NUBES",
       logoSrc: "assets/caza.webp",
       bgSrc: "assets/SkyBack.webp",
-      gradFrom: "#1d01ff",
+      gradFrom: "#0000ff",
       gradTo: "#ffd33d",
       panel: "#0b0b12",
       textMain: "#ffffff",
@@ -238,7 +238,7 @@
         btn = document.createElement("div");
         btn.id = "downloadPosterBtn";
         btn.className = "btn";
-        btn.textContent = "Descargar record";
+        btn.textContent = "Descargar imagen";
         btn.style.marginLeft = "10px";
         const start = overlay.querySelector("#startBtn");
         if (start && start.parentElement === holder) {
