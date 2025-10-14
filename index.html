@@ -954,7 +954,7 @@
             for (let xx = x0; xx < V.W; xx += V.W) safeDraw(tex, xx, y, V.W, h);
           }
           function drawSpeechBubble(text, x, y, maxW = 220) {
-            ctx.font = "bold 14px system-ui, Arial";
+            ctx.font = "bold 14px helvetica-neue-lt-pro-cond, system-ui, Arial";
             const words = String(text).split(/\s+/);
             const lines = [];
             let line = "";
@@ -1083,10 +1083,11 @@
             for (const pa of S.particles) {
               ctx.globalAlpha = Math.max(0, Math.min(1, pa.life));
               if (pa.text) {
-                ctx.font = "bold 20px system-ui, Arial";
+                ctx.font =
+                  "bold 18px helvetica-neue-lt-pro-cond, system-ui, Arial";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
-                ctx.fillStyle = pa.color || "#a3f";
+                ctx.fillStyle = pa.color || "#2d3b97";
                 ctx.fillText(pa.text, pa.x, pa.y);
               } else {
                 ctx.save();
@@ -1094,10 +1095,10 @@
                 ctx.rotate(pa.rot || 0);
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
-                ctx.font = `bold ${Math.round(pa.s)}px system-ui, Apple Color Emoji, Segoe UI Emoji, Arial`;
+                ctx.font = `bold ${Math.round(pa.s)}px helvetica-neue-lt-pro-cond, system-ui, Apple Color Emoji, Segoe UI Emoji, Arial`;
                 ctx.fillStyle = "#ffd33d";
                 ctx.strokeStyle = "#c99b1a";
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 3;
                 const glyph = "♪";
                 ctx.fillText(glyph, 0, 0);
                 ctx.strokeText(glyph, 0, 0);
@@ -1177,7 +1178,7 @@
               subtitleEl.style.lineHeight = "1.35";
 
               subtitleEl.innerHTML = `
-              <div style="display:grid; gap:10px; place-items:center; text-align:center; padding: 15px 15px;">
+              <div style="display:grid; gap:10px; place-items:center; text-align:center; padding: 15px;">
 
                 <p style="margin:0; font-weight: 300;">
                   🌧️ ¡Te caíste entre las nubes! Pero cada caída te acerca más al cielo.
