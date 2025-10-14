@@ -124,7 +124,7 @@
       .btn {
         display: inline-block;
         margin-top: 10px;
-        padding: 10px 14px;
+        padding: 10px 44px;
         border-radius: 12px;
         background: #ffd33d;
         color: #000;
@@ -132,6 +132,13 @@
         cursor: pointer;
         user-select: none;
         pointer-events: auto;
+        transition: all ease 300ms;
+        border: 2px solid #000;
+      }
+      .btn:hover {
+        transform: scale(1.2);
+
+        box-shadow: #1d01ff 5px 5px 0px;
       }
       .stats {
         font-weight: 700;
@@ -161,12 +168,72 @@
           display: none;
         }
       }
-
-      /* Respeta “reducir movimiento” */
       @media (prefers-reduced-motion: reduce) {
         * {
           animation: none !important;
           transition: none !important;
+        }
+      }
+
+      .animate {
+        display: inline-grid;
+        place-items: center;
+        user-select: none;
+        will-change: transform, filter;
+      }
+
+      .pulse {
+        --pulse-scale: 1.08;
+        --pulse-dur: 1.2s;
+        --pulse-ease: ease-in-out;
+        --pulse-glow: 0 0 0px rgba(255, 211, 61, 0);
+        animation: pulse var(--pulse-dur) var(--pulse-ease) infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          filter: none;
+          box-shadow: var(--pulse-glow);
+        }
+        50% {
+          transform: scale(var(--pulse-scale));
+          box-shadow: var(--pulse-glow);
+        }
+      }
+
+      .spin {
+        --spin-dur: 4s;
+        animation: spin var(--spin-dur) linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .float {
+        --float-dy: 10px;
+        --float-dur: 3s;
+        --float-ease: ease-in-out;
+
+        animation: float var(--float-dur) var(--float-ease) infinite;
+      }
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(calc(-1 * var(--float-dy)));
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .pulse,
+        .spin,
+        .float {
+          animation: none !important;
         }
       }
     </style>
@@ -191,7 +258,7 @@
 
       <div id="overlay" class="overlay" aria-live="polite">
         <div>
-          <div id="title">
+          <div id="title" class="animate float">
             <img
               src="assets/caza.webp"
               alt="Bienvenido a Humbe Runner"
@@ -245,7 +312,7 @@
             "position:fixed;inset:0;display:none;place-items:center;background:#000c;z-index:99999;color:#fff;text-align:center;padding:24px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;backdrop-filter:blur(2px)";
           overlay.innerHTML = `
             <div style="max-width:560px">
-              <div style="font-size:64px;line-height:1;margin-bottom:12px">🔁📱</div>
+              <div style="font-size:64px;line-height:1;margin-bottom:12px">🔁</div>
               <h2 style="margin:0 0 6px;font-size:22px">Gira tu dispositivo</h2>
               <p style="margin:0;opacity:.9">Este juego funciona mejor en <b>horizontal</b>.</p>
             </div>`;
@@ -1165,6 +1232,8 @@
           // ---------- Ciclo de vida ----------
           function start() {
             reset();
+            window.__hideShare?.();
+
             S.running = true;
 
             const titleEl = document.getElementById("title");
@@ -1197,6 +1266,7 @@
               im.src = assets.gameOverImg;
               im.alt = "Game Over";
               im.loading = "lazy";
+              im.class = "animate pulse";
               im.decoding = "async";
               im.style.display = "block";
               im.style.margin = "12px auto 0";
@@ -1218,8 +1288,319 @@
           }
 
           if (overlay) overlay.classList.add("show");
+          window.__showShareForState?.(S);
         })();
       });
+    </script>
+
+    <script>
+      /* ================= IG Share ================= */
+      (() => {
+        // Config IG
+        const IG_W = 1080,
+          IG_H = 1350;
+        const PADDING = 64;
+
+        // Helpers
+        function tryOpenInstagramApp() {
+          const candidates = [
+            "instagram://library",
+            "instagram://camera",
+            "instagram://story-camera",
+          ];
+          let opened = false;
+          for (const url of candidates) {
+            try {
+              const w = window.open(url, "_blank");
+              if (w) {
+                opened = true;
+                break;
+              }
+              window.location.href = url;
+              opened = true;
+              break;
+            } catch {}
+          }
+          return opened;
+        }
+
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const loadImage = (src) =>
+          new Promise((res, rej) => {
+            const i = new Image();
+            i.crossOrigin = "anonymous";
+            i.onload = () => res(i);
+            i.onerror = rej;
+            i.src = src;
+          });
+        const coverDraw = (ctx, img, dx, dy, dW, dH) => {
+          // drawImage "object-fit: cover"
+          const iW = img.naturalWidth || img.width;
+          const iH = img.naturalHeight || img.height;
+          const r = Math.max(dW / iW, dH / iH);
+          const w = iW * r,
+            h = iH * r;
+          const x = dx + (dW - w) / 2;
+          const y = dy + (dH - h) / 2;
+          ctx.drawImage(img, x, y, w, h);
+        };
+        const drawRoundedRect = (ctx, x, y, w, h, r) => {
+          r = Math.min(r, w / 2, h / 2);
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath();
+        };
+        const fmt = (n) =>
+          new Intl.NumberFormat("es-MX").format(Math.floor(n || 0));
+
+        async function generateShareImage({ score, meters, best }) {
+          const c = document.createElement("canvas");
+          c.width = IG_W;
+          c.height = IG_H;
+          const ctx = c.getContext("2d");
+
+          try {
+            const bg = await loadImage("assets/SkyBack.webp");
+            coverDraw(ctx, bg, 0, 0, IG_W, IG_H);
+          } catch {
+            const g = ctx.createLinearGradient(0, 0, 0, IG_H);
+            g.addColorStop(0, "#1d01ff");
+            g.addColorStop(1, "#0a0a0a");
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, IG_W, IG_H);
+          }
+
+          const vign = ctx.createRadialGradient(
+            IG_W / 2,
+            IG_H / 2,
+            IG_W * 0.1,
+            IG_W / 2,
+            IG_H / 2,
+            IG_W * 0.7
+          );
+          vign.addColorStop(0, "rgba(0,0,0,0)");
+          vign.addColorStop(1, "rgba(0,0,0,0.35)");
+          ctx.fillStyle = vign;
+          ctx.fillRect(0, 0, IG_W, IG_H);
+
+          // Tarjeta central
+          const cardW = IG_W - PADDING * 2;
+          const cardH = IG_H - PADDING * 2.2;
+          const cardX = PADDING;
+          const cardY = PADDING * 0.9;
+          drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 36);
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.fill();
+
+          const headerH = 160;
+          try {
+            const title = await loadImage("assets/caza.webp");
+            const maxW = Math.min(720, cardW * 0.8);
+            const ratio = title.naturalWidth / title.naturalHeight;
+            const w = maxW,
+              h = w / ratio;
+            ctx.save();
+            ctx.globalAlpha = 1;
+            coverDraw(ctx, title, IG_W / 2 - w / 2, cardY + 28, w, h);
+            ctx.restore();
+          } catch {
+            ctx.fillStyle = "#111";
+            ctx.font = "700 64px Roboto, system-ui, -apple-system, Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("Caza Nubes", IG_W / 2, cardY + 96);
+          }
+
+          // Métricas grandes
+          const rowY0 = cardY + headerH + 80;
+          const rowGap = 160;
+
+          const metrics = [
+            { label: "PUNTOS", value: fmt(score), emoji: "⭐" },
+            { label: "DISTANCIA", value: fmt(meters) + " m", emoji: "🏃" },
+            { label: "RÉCORD", value: fmt(best), emoji: "🥇" },
+          ];
+
+          ctx.textAlign = "center";
+          metrics.forEach((m, i) => {
+            const y = rowY0 + i * rowGap;
+            // etiqueta
+            ctx.fillStyle = "#333";
+            ctx.font = "700 34px Roboto, system-ui, -apple-system, Arial";
+            ctx.fillText(m.label, IG_W / 2, y);
+            // valor
+            ctx.fillStyle = "#000";
+            ctx.font = "900 92px Roboto, system-ui, -apple-system, Arial";
+            ctx.fillText(m.value, IG_W / 2, y + 76);
+            // emoji
+            ctx.font = "700 48px Apple Color Emoji, Segoe UI Emoji, Roboto";
+            ctx.fillText(m.emoji, IG_W / 2, y - 34);
+          });
+
+          // Sello / hashtag
+          const footY = cardY + cardH - 40;
+          ctx.fillStyle = "#111";
+          ctx.font = "700 32px Roboto, system-ui, -apple-system, Arial";
+          ctx.textAlign = "left";
+          ctx.fillText("#Humbe #CazaNubes", cardX + 28, footY);
+
+          // Marca/fecha a la derecha
+          const date = new Date();
+          const mx = date
+            .toLocaleDateString("es-MX", {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+            })
+            .replaceAll(".", "");
+          ctx.textAlign = "right";
+          ctx.fillText(mx, cardX + cardW - 28, footY);
+
+          // Sticker opcional (estrella/nube buena) si está
+          try {
+            const star = await loadImage("assets/GoodCloud.webp");
+            const w = 220,
+              h = 220;
+            ctx.globalAlpha = 0.95;
+            ctx.drawImage(star, cardX + cardW - w - 28, cardY + 28, w, h);
+            ctx.globalAlpha = 1;
+          } catch {}
+
+          // A JPG para IG
+          return new Promise((resolve) => {
+            c.toBlob((blob) => resolve(blob), "image/jpeg", 0.92);
+          });
+        }
+
+        async function shareOrDownload(
+          blob,
+          filename = "humbe-caza-nubes.jpg",
+          { preferInstagram = false } = {}
+        ) {
+          // 1) Intenta Web Share con archivo (mejor experiencia si el usuario elige IG)
+          try {
+            if (navigator.canShare && window.File) {
+              const file = new File([blob], filename, { type: "image/jpeg" });
+              if (navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                  files: [file],
+                  text: preferInstagram
+                    ? "Abrir en Instagram y compartir ✨"
+                    : "Mi puntaje en Caza Nubes ✨",
+                });
+                return;
+              }
+            }
+          } catch {
+            /* sigue con fallback */
+          }
+
+          // 2) Sin Web Share: descarga la imagen
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+
+          // 3) Si el usuario pidió IG y estamos en móvil, intenta abrir la app
+          if (
+            preferInstagram &&
+            /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+          ) {
+            // Pequeño retardo para que el archivo quede en descargas
+            setTimeout(() => {
+              tryOpenInstagramApp();
+            }, 400);
+          }
+
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+            a.remove();
+          }, 1200);
+        }
+
+        // Boton compartir
+        function ensureShareButton() {
+          const overlay = document.getElementById("overlay");
+          if (!overlay) return null;
+          let btn = document.getElementById("shareBtn");
+          if (!btn) {
+            btn = document.createElement("button");
+            btn.id = "shareBtn";
+            btn.className = "btn";
+            btn.textContent = "Compartir";
+            btn.style.marginLeft = "10px";
+            btn.style.display = "none";
+            // Insertar junto al botón Jugar
+            const wrap = overlay.querySelector("div > div");
+            const startBtn = document.getElementById("startBtn");
+            if (startBtn && startBtn.parentElement) {
+              startBtn.parentElement.appendChild(btn);
+            } else if (wrap) {
+              wrap.appendChild(btn);
+            } else {
+              overlay.appendChild(btn);
+            }
+          }
+          return btn;
+        }
+
+        const _setOverFlag = Symbol("over-flag");
+        if (!window[_setOverFlag]) {
+          window[_setOverFlag] = true;
+
+          const shareBtn = ensureShareButton();
+
+          window.__showShareForState = function (S) {
+            const btn = ensureShareButton();
+            if (!btn) return;
+
+            btn.onclick = async () => {
+              const data = {
+                score: Math.floor(S?.score || 0),
+                meters: Math.floor(S?.meters || 0),
+                best: Math.floor(S?.best || 0),
+              };
+              const blob = await generateShareImage(data);
+              await shareOrDownload(blob, `caza-nubes-${data.score}.jpg`, {
+                preferInstagram: true,
+              });
+            };
+            btn.style.display = "inline-block";
+          };
+
+          window.__hideShare = function () {
+            const btn = document.getElementById("shareBtn");
+            if (btn) btn.style.display = "none";
+          };
+        }
+
+        const mo = new MutationObserver(() => {
+          const isShown = document
+            .getElementById("overlay")
+            ?.classList.contains("show");
+          if (!isShown) window.__hideShare?.();
+        });
+        const ov = document.getElementById("overlay");
+        if (ov)
+          mo.observe(ov, { attributes: true, attributeFilter: ["class"] });
+
+        window.generateCazaNubesShare = async (score, meters, best) => {
+          const blob = await generateShareImage({ score, meters, best });
+          await shareOrDownload(
+            blob,
+            `caza-nubes-${Math.floor(score || 0)}.jpg`
+          );
+        };
+      })();
     </script>
   </body>
 </html>
