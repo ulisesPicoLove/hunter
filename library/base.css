@@ -309,3 +309,11 @@ canvas {
         display: none;
     }
 }
+
+@media (max-width: 992px) {
+
+    #subtitle p {
+        font-size: 12px;
+        margin: 5px;
+    }
+}
