@@ -126,7 +126,11 @@
       </div>
     </div>
 
-    <audio id="bgm" src="assets/sound.mp3" preload="auto" loop></audio>
+    <audio
+      id="bgm"
+      src="assets/vetiveryamaretto.mp3"
+      preload="auto"
+      loop></audio>
     <audio id="sfxJump" src="assets/jump.mp3" preload="auto"></audio>
     <audio id="sfxStar" src="assets/collect.mp3" preload="auto"></audio>
     <audio id="sfxBonus" src="assets/point.mp3" preload="auto"></audio>
@@ -438,17 +442,28 @@
             return a;
           }
 
-          // ---------- 🔊 AUDIO ----------
+          // ---------- 🔊 AUDIO (volumen fijo por sistema) ----------
           const muteBtn = document.getElementById("muteBtn");
           const bgm = document.getElementById("bgm");
 
-          const sfxIds = MOBILE
+          // ✅ Volúmenes de sistema (ajusta a gusto)
+          const MASTER_VOLUME = 0.07; // Volumen global para SFX (jump, star, bonus, over)
+          const BGM_VOLUME = 0.25; // Volumen independiente para la música de fondo
+
+          // (Opcional) Políticas móviles para reducir ruido de coleccionables
+          const __IS_MOBILE__ =
+            ("ontouchstart" in window || navigator.maxTouchPoints > 0) &&
+            /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(
+              navigator.userAgent
+            );
+
+          // En móvil, puedes silenciar star/bonus si quieres cumplir políticas estrictas
+          const sfxIds = __IS_MOBILE__
             ? ["sfxJump", "sfxOver"]
             : ["sfxJump", "sfxStar", "sfxBonus", "sfxOver"];
 
           let audioReady = false;
           let muted = localStorage.getItem("humbe_muted") === "1";
-          let MASTER_VOLUME = 0.03;
 
           function updateMuteButton() {
             if (!muteBtn) return;
@@ -461,35 +476,26 @@
               ? "🔇 Sonido desactivado"
               : "🔊 Sonido activado";
           }
-          function applyMuteState() {
-            // Usa tu constante MOBILE si ya existe; si no, detectamos aquí:
-            const __IS_MOBILE__ =
-              typeof MOBILE !== "undefined"
-                ? MOBILE
-                : ("ontouchstart" in window || navigator.maxTouchPoints > 0) &&
-                  /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(
-                    navigator.userAgent
-                  );
 
-            // Música de fondo
+          function applyMuteState() {
+            // BGM con su volumen independiente
             if (bgm) {
               bgm.muted = muted;
+              bgm.volume = muted ? 0 : BGM_VOLUME;
               if (muted) {
                 try {
                   bgm.pause();
                 } catch {}
               } else if (audioReady) {
-                bgm.volume = MASTER_VOLUME;
                 bgm.play().catch(() => {});
               }
             }
-
-            // SFX
+            // SFX con volumen de sistema (MASTER_VOLUME)
             sfxIds.forEach((id) => {
               const a = document.getElementById(id);
               if (!a) return;
 
-              // En móvil, fuerza silencio para Star/Bonus, sin importar el toggle global
+              // En móvil: fuerza silencio para star/bonus si los excluiste del array sfxIds
               if (__IS_MOBILE__ && (id === "sfxStar" || id === "sfxBonus")) {
                 a.muted = true;
                 a.volume = 0;
@@ -499,8 +505,6 @@
                 } catch {}
                 return;
               }
-
-              // Resto de SFX siguen el estado global
               a.muted = muted;
               a.volume = muted ? 0 : MASTER_VOLUME;
             });
@@ -521,40 +525,45 @@
                 a.volume = vol;
               });
           }
+
           async function unlockAudio() {
             if (audioReady) return;
             audioReady = true;
             try {
+              // Inicializa SFX al volumen del sistema
               sfxIds.forEach((id) => {
                 const a = document.getElementById(id);
-                if (a) {
-                  a.volume = MASTER_VOLUME;
-                  primeAudioEl(a);
-                }
+                if (!a) return;
+                a.volume = MASTER_VOLUME;
+                primeAudioEl(a);
               });
+              // Inicializa BGM a su volumen independiente
               if (bgm) {
-                bgm.volume = MASTER_VOLUME;
+                bgm.volume = BGM_VOLUME;
                 bgm.muted = muted;
-                if (!muted) {
-                  await bgm.play().catch(() => {});
-                }
+                if (!muted) await bgm.play().catch(() => {});
               }
             } catch (err) {
               console.warn("Audio init:", err);
             }
             updateMuteButton();
           }
+
           function playSfx(id) {
-            if (MOBILE && (id === "sfxStar" || id === "sfxBonus")) return;
+            // Si excluiste star/bonus en móvil, esto evita sonarlos
+            if (__IS_MOBILE__ && (id === "sfxStar" || id === "sfxBonus"))
+              return;
             if (muted || !audioReady) return;
             const a = document.getElementById(id);
             if (!a) return;
             try {
               a.currentTime = 0;
-              a.volume = MASTER_VOLUME;
+              a.volume = MASTER_VOLUME; // <- siempre usa el volumen de sistema SFX
               a.play().catch(() => {});
             } catch {}
           }
+
+          // Toggle mute
           if (muteBtn) {
             muteBtn.addEventListener("click", () => {
               muted = !muted;
@@ -566,7 +575,7 @@
           updateMuteButton();
           applyMuteState();
 
-          // Primer gesto
+          // Primer gesto del usuario para desbloquear audio
           window.addEventListener(
             "pointerdown",
             () => {
@@ -585,6 +594,20 @@
             },
             { once: true }
           );
+
+          // Exporta helpers si te sirven en otros módulos
+          window.AudioMixers = {
+            get muted() {
+              return muted;
+            },
+            setMuted(v) {
+              muted = !!v;
+              localStorage.setItem("humbe_muted", muted ? "1" : "0");
+              updateMuteButton();
+              applyMuteState();
+            },
+            playSfx, // respeta MASTER_VOLUME
+          };
 
           // ---------- Estado ----------
           let S;
@@ -1223,8 +1246,8 @@
                   Puntos: <strong>${finalPoints}</strong> · Distancia: <strong>${Math.floor(S.meters)}</strong> m · Récord: <strong>${S.best}</strong>
                 </p>
 
-                <p style="margin:0; font-weight: 300;">
-                  Comparte tu logro en Instagram con <b>#CazaNubes</b> y <b>@Humbe</b> ☁️💫
+                <p style="margin:0; font-weight: 300!important;">
+                  Comparte tu logro en Instagram con <strong>#CazaNubes</strong> y <strong>@Humbe</strong> ☁️💫
                 </p>
               </div>
             `;
