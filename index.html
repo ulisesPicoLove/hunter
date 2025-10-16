@@ -126,11 +126,7 @@
       </div>
     </div>
 
-    <audio
-      id="bgm"
-      src="assets/vetiveryamaretto.mp3"
-      preload="auto"
-      loop></audio>
+    <audio id="bgm" src="assets/vetiver.mp3" preload="auto" loop></audio>
     <audio id="sfxJump" src="assets/jump.mp3" preload="auto"></audio>
     <audio id="sfxStar" src="assets/collect.mp3" preload="auto"></audio>
     <audio id="sfxBonus" src="assets/point.mp3" preload="auto"></audio>
@@ -363,7 +359,7 @@
             meteor: "assets/meteorito.webp",
             bird: "assets/BadCloud.webp",
             player: {
-              runL: "assets/HumbeLeft.webp",
+              runL: "assets/HumbeRun.webp",
               runR: "assets/HumbeRigth.webp",
               jump: "assets/HumbeJump.webp",
             },
@@ -446,7 +442,6 @@
           const muteBtn = document.getElementById("muteBtn");
           const bgm = document.getElementById("bgm");
 
-          // ✅ Volúmenes de sistema (ajusta a gusto)
           const MASTER_VOLUME = 0.07; // Volumen global para SFX (jump, star, bonus, over)
           const BGM_VOLUME = 0.25; // Volumen independiente para la música de fondo
 
