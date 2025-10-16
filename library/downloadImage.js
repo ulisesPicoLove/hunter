@@ -84,7 +84,7 @@
       const fontLabelPx = Math.round(H * 0.025);
       const fontLinesPx = Math.round(H * 0.035);
       const gapLabel = Math.round(H * 0.051); // separación número -> "Score:"
-      const gapBetween = Math.round(H * 0.043); // separación entre líneas
+      const gapBetween = Math.round(H * 0.049); // separación entre líneas
 
       const yScore = Math.round(H * 0.36);
       const xCenter = Math.round(W / 2);
