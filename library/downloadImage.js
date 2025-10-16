@@ -80,13 +80,13 @@
       ctx.shadowBlur = 0;
       ctx.shadowColor = "transparent";
 
-      const fontScorePx = Math.round(H * 0.09);
+      const fontScorePx = Math.round(H * 0.1); // Tamaño de la fuente
       const fontLabelPx = Math.round(H * 0.025);
       const fontLinesPx = Math.round(H * 0.035);
-      const gapLabel = Math.round(H * 0.055); // separación número -> "Score:"
-      const gapBetween = Math.round(H * 0.057); // separación entre líneas
+      const gapLabel = Math.round(H * 0.051); // separación número -> "Score:"
+      const gapBetween = Math.round(H * 0.043); // separación entre líneas
 
-      const yScore = Math.round(H * 0.38);
+      const yScore = Math.round(H * 0.36);
       const xCenter = Math.round(W / 2);
 
       ctx.font = `900 ${fontScorePx}px ${this.cfg.family}`;
