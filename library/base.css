@@ -141,6 +141,8 @@ canvas {
 
 .overlay.show {
     display: grid;
+    align-items: center;
+    justify-content: center;
 }
 
 .overlay>div {
