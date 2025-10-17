@@ -5,10 +5,60 @@
     <meta
       name="viewport"
       content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-    <title>Dueño del cielo</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="assets/favicon/favicon-32x32.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="favicon/favicon-16x16.png" />
+    <link rel="icon" href="favicon/favicon.ico" />
+
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="favicon/apple-touch-icon.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="favicon/android-chrome-192x192.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="512x512"
+      href="favicon/android-chrome-512x512.png" />
+
+    <link rel="manifest" href="favicon/site.webmanifest" />
+
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="msapplication-TileColor" content="#ffffff" />
+
+    <title>Dueño del cielo | ¡Prepárate para ser dueño del cielo!</title>
+    <meta name="description" content="¡Prepárate para ser dueño del cielo!" />
+    <meta
+      name="keywords"
+      content="juego, divertido, mini game, entretenimiento" />
+    <meta name="author" content="Pico Love" />
+
     <script src="library/downloadImage.js"></script>
     <link href="library/base.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://use.typekit.net/xkt8vij.css" />
+
+    <meta name="twitter:card" content="Dueño del Cielo" />
+    <meta name="twitter:title" content="Dueño del Cielo" />
+    <meta
+      name="twitter:description"
+      content="¡Prepárate para ser dueño del cielo!" />
+    <meta
+      name="twitter:image"
+      content="https://vetiver-y-amaretto.dueñodelcielo.com/assets/OpenGraph.png" />
+    <meta name="twitter:creator" content="@Humbe" />
 
     <meta property="og:title" content="Dueño del cielo" />
     <meta property="og:type" content="website" />
@@ -18,6 +68,7 @@
     <meta
       property="og:image"
       content="https://vetiver-y-amaretto.dueñodelcielo.com/assets/OpenGraph.png" />
+    <meta property="og:locale" content="es_MX" />
 
     <!-- Google Tag Manager -->
     <script>
@@ -71,7 +122,7 @@
           <div id="title" class="animate float">
             <img
               src="assets/caza.webp"
-              alt="Bienvenido a Humbe Runner"
+              alt="¡Prepárate para ser dueño del cielo!"
               style="width: clamp(140px, 20%, 400px)" />
           </div>
 
@@ -80,7 +131,7 @@
               <img
                 src="assets/GoodCloud.webp"
                 style="width: 18px; height: 13px"
-                alt="" />
+                alt="Dueño del Cielo" />
               ¡Prepárate para ser dueño del cielo!
               <img
                 src="assets/GoodCloud.webp"
@@ -446,18 +497,15 @@
           const muteBtn = document.getElementById("muteBtn");
           const bgm = document.getElementById("bgm");
 
-          // ✅ Volúmenes de sistema (ajusta a gusto)
-          const MASTER_VOLUME = 0.07; // Volumen global para SFX (jump, star, bonus, over)
-          const BGM_VOLUME = 0.25; // Volumen independiente para la música de fondo
+          const MASTER_VOLUME = 0.06; // Volumen global para SFX
+          const BGM_VOLUME = 0.25; // Volumen song
 
-          // (Opcional) Políticas móviles para reducir ruido de coleccionables
           const __IS_MOBILE__ =
             ("ontouchstart" in window || navigator.maxTouchPoints > 0) &&
             /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(
               navigator.userAgent
             );
 
-          // En móvil, puedes silenciar star/bonus si quieres cumplir políticas estrictas
           const sfxIds = __IS_MOBILE__
             ? ["sfxJump", "sfxOver"]
             : ["sfxJump", "sfxStar", "sfxBonus", "sfxOver"];
@@ -478,7 +526,6 @@
           }
 
           function applyMuteState() {
-            // BGM con su volumen independiente
             if (bgm) {
               bgm.muted = muted;
               bgm.volume = muted ? 0 : BGM_VOLUME;
@@ -495,7 +542,6 @@
               const a = document.getElementById(id);
               if (!a) return;
 
-              // En móvil: fuerza silencio para star/bonus si los excluiste del array sfxIds
               if (__IS_MOBILE__ && (id === "sfxStar" || id === "sfxBonus")) {
                 a.muted = true;
                 a.volume = 0;
@@ -530,14 +576,12 @@
             if (audioReady) return;
             audioReady = true;
             try {
-              // Inicializa SFX al volumen del sistema
               sfxIds.forEach((id) => {
                 const a = document.getElementById(id);
                 if (!a) return;
                 a.volume = MASTER_VOLUME;
                 primeAudioEl(a);
               });
-              // Inicializa BGM a su volumen independiente
               if (bgm) {
                 bgm.volume = BGM_VOLUME;
                 bgm.muted = muted;
@@ -550,7 +594,6 @@
           }
 
           function playSfx(id) {
-            // Si excluiste star/bonus en móvil, esto evita sonarlos
             if (__IS_MOBILE__ && (id === "sfxStar" || id === "sfxBonus"))
               return;
             if (muted || !audioReady) return;
@@ -558,12 +601,11 @@
             if (!a) return;
             try {
               a.currentTime = 0;
-              a.volume = MASTER_VOLUME; // <- siempre usa el volumen de sistema SFX
+              a.volume = MASTER_VOLUME;
               a.play().catch(() => {});
             } catch {}
           }
 
-          // Toggle mute
           if (muteBtn) {
             muteBtn.addEventListener("click", () => {
               muted = !muted;
@@ -575,7 +617,6 @@
           updateMuteButton();
           applyMuteState();
 
-          // Primer gesto del usuario para desbloquear audio
           window.addEventListener(
             "pointerdown",
             () => {
@@ -595,7 +636,6 @@
             { once: true }
           );
 
-          // Exporta helpers si te sirven en otros módulos
           window.AudioMixers = {
             get muted() {
               return muted;
@@ -606,7 +646,7 @@
               updateMuteButton();
               applyMuteState();
             },
-            playSfx, // respeta MASTER_VOLUME
+            playSfx,
           };
 
           // ---------- Estado ----------
@@ -1247,7 +1287,7 @@
                 </p>
 
                 <p style="margin:0; font-weight: 300!important;">
-                  Comparte tu logro en Instagram con <strong>#CazaNubes</strong> y <strong>@Humbe</strong> ☁️💫
+                  Comparte tu logro en Instagram con <strong>#DuseñoDelCielo</strong> y <strong>@Humbe</strong> ☁️💫
                 </p>
               </div>
             `;
