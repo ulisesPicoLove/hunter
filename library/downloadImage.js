@@ -156,8 +156,8 @@
         btn.style.opacity = "0.7";
         try {
           const dataURL = await this.make({ score, best, meters });
-          const hash = Math.random().toString(36).substring(2, 10);
-          dl(dataURL, `cazaNubes-${hash}.png`);
+          const hash = Math.random().toString(36).substring(2, 6);
+          dl(dataURL, `Dueño-del-cielo-${hash}.png`);
         } catch (err) {
           console.error(err);
           alert("No se pudo generar la imagen.");
